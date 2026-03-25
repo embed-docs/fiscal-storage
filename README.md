@@ -47,7 +47,7 @@ X-Api-Key: emb_sua_chave_aqui
 A API utiliza versionamento no path. Utilize sempre o prefixo `/v1/` nas suas chamadas.
 
 ```
-POST https://storage-api.embed.it/v1/ingest
+POST https://storage-api.embed.zone/v1/ingest
 ```
 
 **Garantias de compatibilidade:**
@@ -165,7 +165,7 @@ Verifica se a API esta disponivel. Nao requer autenticacao.
 ### cURL
 
 ```bash
-curl -X POST "https://storage-api.embed.it/v1/ingest?filename=nota_001.xml" \
+curl -X POST "https://storage-api.embed.zone/v1/ingest?filename=nota_001.xml" \
   -H "X-Api-Key: emb_sua_chave_aqui" \
   -H "Content-Type: application/xml" \
   --data-binary @/caminho/para/nota_fiscal.xml
@@ -176,7 +176,7 @@ curl -X POST "https://storage-api.embed.it/v1/ingest?filename=nota_001.xml" \
 ```python
 import requests
 
-API_URL = "https://storage-api.embed.it/v1/ingest"
+API_URL = "https://storage-api.embed.zone/v1/ingest"
 API_KEY = "emb_sua_chave_aqui"
 
 with open("nota_fiscal.xml", "rb") as f:
@@ -206,7 +206,7 @@ const fs = require('fs');
 const https = require('https');
 const url = require('url');
 
-const API_URL = 'https://storage-api.embed.it/v1/ingest';
+const API_URL = 'https://storage-api.embed.zone/v1/ingest';
 const API_KEY = 'emb_sua_chave_aqui';
 const filePath = 'nota_fiscal.xml';
 
@@ -246,7 +246,7 @@ req.end();
 ### JavaScript (Fetch API — Browser/Deno)
 
 ```javascript
-const API_URL = 'https://storage-api.embed.it/v1/ingest';
+const API_URL = 'https://storage-api.embed.zone/v1/ingest';
 const API_KEY = 'emb_sua_chave_aqui';
 
 async function enviarXml(xmlContent, filename) {
@@ -278,7 +278,7 @@ async function enviarXml(xmlContent, filename) {
 
 ```php
 <?php
-$apiUrl = "https://storage-api.embed.it/v1/ingest";
+$apiUrl = "https://storage-api.embed.zone/v1/ingest";
 $apiKey = "emb_sua_chave_aqui";
 $xmlPath = "/caminho/para/nota_fiscal.xml";
 
@@ -314,7 +314,7 @@ if ($httpCode === 200) {
 ```csharp
 using System.Net.Http;
 
-var apiUrl = "https://storage-api.embed.it/v1/ingest";
+var apiUrl = "https://storage-api.embed.zone/v1/ingest";
 var apiKey = "emb_sua_chave_aqui";
 
 var xmlContent = File.ReadAllBytes("nota_fiscal.xml");
@@ -343,7 +343,7 @@ import java.nio.file.*;
 
 public class XmlIngestClient {
     public static void main(String[] args) throws Exception {
-        String apiUrl = "https://storage-api.embed.it/v1/ingest";
+        String apiUrl = "https://storage-api.embed.zone/v1/ingest";
         String apiKey = "emb_sua_chave_aqui";
 
         byte[] xmlBytes = Files.readAllBytes(Path.of("nota_fiscal.xml"));
@@ -364,50 +364,94 @@ public class XmlIngestClient {
 }
 ```
 
-### Delphi (12+)
+### Delphi (10.3+)
+
+Utiliza `THTTPClient` nativo do Delphi (recomendado). **Nao use RestRequest4D** para esta integracao — ele pode causar `I/O error 105` ao ler a resposta JSON.
 
 ```pascal
 uses
-  System.SysUtils, System.Classes, System.Net.HttpClient,
-  System.Net.URLClient, System.Net.Mime;
+  System.SysUtils, System.Classes, System.JSON, System.Net.HttpClient,
+  System.Net.URLClient, System.NetEncoding;
 
 procedure EnviarXml;
 var
-  HttpClient: THTTPClient;
-  Response: IHTTPResponse;
-  XmlStream: TFileStream;
-  ApiUrl, ApiKey, FilePath: string;
-  Headers: TNetHeaders;
+  LHttpClient: THTTPClient;
+  LHttpResponse: IHTTPResponse;
+  LXmlStream: TFileStream;
+  LJsonObj: TJSONObject;
+  LApiUrl, LApiKey, LFilePath: string;
+  LFilename, LHash, LMessage: string;
+  LHeaders: TNetHeaders;
 begin
-  ApiUrl := 'https://storage-api.embed.it/v1/ingest';
-  ApiKey := 'emb_sua_chave_aqui';
-  FilePath := 'C:\notas\nota_fiscal.xml';
+  LApiUrl  := 'https://storage-api.embed.zone/v1/ingest';
+  LApiKey  := 'emb_sua_chave_aqui';
+  LFilePath := 'C:\notas\nota_fiscal.xml';
 
-  HttpClient := THTTPClient.Create;
-  XmlStream := TFileStream.Create(FilePath, fmOpenRead or fmShareDenyNone);
+  if not FileExists(LFilePath) then
+    raise Exception.CreateFmt('Arquivo nao encontrado: %s', [LFilePath]);
+
+  LHttpClient := THTTPClient.Create;
+  // fmShareDenyNone evita I/O error 105 se outro processo estiver usando o arquivo
+  LXmlStream := TFileStream.Create(LFilePath, fmOpenRead or fmShareDenyNone);
   try
-    Headers := [
-      TNameValuePair.Create('X-Api-Key', ApiKey),
+    LHttpClient.ConnectionTimeout := 10000;  // 10s para conectar
+    LHttpClient.ResponseTimeout   := 30000;  // 30s para resposta
+
+    LHeaders := [
+      TNameValuePair.Create('X-Api-Key', LApiKey),
       TNameValuePair.Create('Content-Type', 'application/xml')
     ];
 
-    Response := HttpClient.Post(
-      ApiUrl + '?filename=' + TNetEncoding.URL.Encode(ExtractFileName(FilePath)),
-      XmlStream,
+    LHttpResponse := LHttpClient.Post(
+      LApiUrl + '?filename=' + TNetEncoding.URL.Encode(ExtractFileName(LFilePath)),
+      LXmlStream,
       nil,
-      Headers
+      LHeaders
     );
 
-    if Response.StatusCode = 200 then
-      WriteLn('Enviado com sucesso: ' + Response.ContentAsString())
+    if LHttpResponse.StatusCode = 200 then
+    begin
+      // Sucesso — extrair campos do JSON
+      LJsonObj := TJSONObject.ParseJSONValue(LHttpResponse.ContentAsString) as TJSONObject;
+      try
+        if Assigned(LJsonObj) then
+        begin
+          LFilename := LJsonObj.GetValue<string>('filename', '');
+          LHash     := LJsonObj.GetValue<string>('hash', '');
+          LMessage  := LJsonObj.GetValue<string>('message', '');
+          // Usar as variaveis conforme necessidade (gravar hash no banco, etc.)
+          ShowMessage('Enviado com sucesso!' + #13#10 +
+                      'Arquivo: ' + LFilename + #13#10 +
+                      'Hash: ' + LHash);
+        end;
+      finally
+        LJsonObj.Free;
+      end;
+    end
     else
-      WriteLn(Format('Erro %d: %s', [Response.StatusCode, Response.ContentAsString()]));
+    begin
+      // Erro — extrair mensagem
+      LJsonObj := TJSONObject.ParseJSONValue(LHttpResponse.ContentAsString) as TJSONObject;
+      try
+        if Assigned(LJsonObj) then
+          LMessage := LJsonObj.GetValue<string>('error',
+                        LJsonObj.GetValue<string>('message', ''))
+        else
+          LMessage := LHttpResponse.ContentAsString;
+      finally
+        LJsonObj.Free;
+      end;
+      ShowMessage(Format('Erro %d: %s', [LHttpResponse.StatusCode, LMessage]));
+    end;
+
   finally
-    XmlStream.Free;
-    HttpClient.Free;
+    LXmlStream.Free;
+    LHttpClient.Free;
   end;
 end;
 ```
+
+> **Importante:** Use sempre `fmOpenRead or fmShareDenyNone` no `TFileStream.Create` para evitar `I/O error 105` quando o arquivo XML ainda esta sendo usado por outro processo (ex: sistema fiscal).
 
 ### Go
 
@@ -424,7 +468,7 @@ import (
 )
 
 func main() {
-    apiURL := "https://storage-api.embed.it/v1/ingest"
+    apiURL := "https://storage-api.embed.zone/v1/ingest"
     apiKey := "emb_sua_chave_aqui"
     filePath := "nota_fiscal.xml"
 
@@ -483,7 +527,7 @@ Disponibilizamos scripts prontos para envio massivo de XMLs com paralelismo conf
 ./bulk-send.sh <sua_api_key> /caminho/para/xmls/ --dry-run
 ```
 
-#### Windows (PowerShell 7+)
+#### Windows (PowerShell 5.1+)
 
 ```powershell
 .\bulk-send.ps1 emb_sua_chave... C:\notas
@@ -574,6 +618,20 @@ Voce pode reenviar documentos com seguranca, sem risco de duplicidade.
 | Requisicoes por segundo | Sem limite rigido (auto-scaling) |
 | Timeout da requisicao | 30 segundos |
 | Tipos de documentos aceitos | Qualquer XML fiscal valido |
+
+---
+
+## Problemas Comuns
+
+| Sintoma | Causa | Solucao |
+|---------|-------|---------|
+| HTTP 404 `{"message":"Not Found"}` | URL sem o path `/v1/ingest` ou usando metodo GET em vez de POST | Verificar se a URL esta completa: `https://storage-api.embed.zone/v1/ingest`. O metodo deve ser **POST**, nao GET. |
+| HTTP 401 `Unauthorized` | Chave de API invalida ou de ambiente errado | Confirmar que a chave comeca com `emb_` e que o ambiente da URL corresponde a chave (homologacao = `.embed.zone`, producao = `.embed.it`). |
+| HTTP 403 `Forbidden` | Chave de API expirada, revogada ou inativa | Entrar em contato com [comercial@embed.it](mailto:comercial@embed.it) para verificar o status da chave. |
+| HTTP 400 `Body vazio` | O XML nao foi enviado no corpo da requisicao | Verificar se o conteudo do XML esta sendo enviado no body do POST, nao como parametro da URL. |
+| `I/O error 105` (Delphi) | Arquivo XML aberto por outro processo ou stream nao inicializado | Usar `fmOpenRead or fmShareDenyNone` no `TFileStream.Create`. Nao usar `fmShareDenyWrite`. |
+| `I/O error 105` no Response (Delphi/RestRequest4D) | RestRequest4D nao consegue ler resposta JSON | Usar `THTTPClient` nativo em vez do RestRequest4D. Ver exemplo Delphi acima. |
+| Timeout na requisicao | XML muito grande ou rede lenta | O timeout da API e 30 segundos. Para XMLs grandes, verificar a conexao. O limite de tamanho e 6 MB. |
 
 ---
 
