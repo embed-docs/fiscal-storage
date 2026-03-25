@@ -165,6 +165,7 @@ Verifica se a API esta disponivel. Nao requer autenticacao.
 ### cURL
 
 ```bash
+# Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
 curl -X POST "https://storage-api.embed.zone/v1/ingest?filename=nota_001.xml" \
   -H "X-Api-Key: emb_sua_chave_aqui" \
   -H "Content-Type: application/xml" \
@@ -176,6 +177,7 @@ curl -X POST "https://storage-api.embed.zone/v1/ingest?filename=nota_001.xml" \
 ```python
 import requests
 
+# Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
 API_URL = "https://storage-api.embed.zone/v1/ingest"
 API_KEY = "emb_sua_chave_aqui"
 
@@ -206,6 +208,7 @@ const fs = require('fs');
 const https = require('https');
 const url = require('url');
 
+// Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
 const API_URL = 'https://storage-api.embed.zone/v1/ingest';
 const API_KEY = 'emb_sua_chave_aqui';
 const filePath = 'nota_fiscal.xml';
@@ -246,10 +249,12 @@ req.end();
 ### JavaScript (Fetch API — Browser/Deno)
 
 ```javascript
+// Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
 const API_URL = 'https://storage-api.embed.zone/v1/ingest';
 const API_KEY = 'emb_sua_chave_aqui';
 
-async function enviarXml(xmlContent, filename) {
+async function enviarXml</antml>
+</invoke>(xmlContent, filename) {
     const response = await fetch(
         `${API_URL}?filename=${encodeURIComponent(filename)}`,
         {
@@ -278,6 +283,7 @@ async function enviarXml(xmlContent, filename) {
 
 ```php
 <?php
+// Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
 $apiUrl = "https://storage-api.embed.zone/v1/ingest";
 $apiKey = "emb_sua_chave_aqui";
 $xmlPath = "/caminho/para/nota_fiscal.xml";
@@ -314,6 +320,7 @@ if ($httpCode === 200) {
 ```csharp
 using System.Net.Http;
 
+// Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
 var apiUrl = "https://storage-api.embed.zone/v1/ingest";
 var apiKey = "emb_sua_chave_aqui";
 
@@ -343,6 +350,7 @@ import java.nio.file.*;
 
 public class XmlIngestClient {
     public static void main(String[] args) throws Exception {
+        // Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
         String apiUrl = "https://storage-api.embed.zone/v1/ingest";
         String apiKey = "emb_sua_chave_aqui";
 
@@ -366,7 +374,7 @@ public class XmlIngestClient {
 
 ### Delphi (10.3+)
 
-Utiliza `THTTPClient` nativo do Delphi (recomendado). **Nao use RestRequest4D** para esta integracao — ele pode causar `I/O error 105` ao ler a resposta JSON.
+Utilizar `THTTPClient` nativo do Delphi (recomendado). 
 
 ```pascal
 uses
@@ -383,6 +391,7 @@ var
   LFilename, LHash, LMessage: string;
   LHeaders: TNetHeaders;
 begin
+  // Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
   LApiUrl  := 'https://storage-api.embed.zone/v1/ingest';
   LApiKey  := 'emb_sua_chave_aqui';
   LFilePath := 'C:\notas\nota_fiscal.xml';
@@ -468,6 +477,7 @@ import (
 )
 
 func main() {
+    // Ambiente de homologacao. Para producao, trocar para: https://storage-api.embed.it/v1/ingest
     apiURL := "https://storage-api.embed.zone/v1/ingest"
     apiKey := "emb_sua_chave_aqui"
     filePath := "nota_fiscal.xml"
