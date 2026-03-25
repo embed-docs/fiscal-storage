@@ -531,20 +531,22 @@ Disponibilizamos scripts prontos para envio massivo de XMLs com paralelismo conf
 **Requisitos:** bash, curl, python3
 
 ```bash
-./bulk-send.sh <sua_api_key> /caminho/para/xmls/
-./bulk-send.sh <sua_api_key> /caminho/para/xmls/ --parallel 20 --verbose
-./bulk-send.sh <sua_api_key> /caminho/para/xmls/ --recursive --organize
-./bulk-send.sh <sua_api_key> /caminho/para/xmls/ --dry-run
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/"
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --parallel 20 --verbose
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --recursive --organize
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --dry-run
 ```
 
 #### Windows (PowerShell 5.1+)
 
 ```powershell
-.\bulk-send.ps1 emb_sua_chave... C:\notas
-.\bulk-send.ps1 emb_sua_chave... C:\notas -Parallel 20 -VerboseOutput
-.\bulk-send.ps1 emb_sua_chave... C:\notas -Recursive -Organize
-.\bulk-send.ps1 emb_sua_chave... C:\notas -DryRun
+.\bulk-send.ps1 emb_sua_chave... "C:\notas"
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Parallel 20 -VerboseOutput
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Recursive -Organize
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -DryRun
 ```
+
+> **Importante:** Sempre passe o caminho do diretorio entre **aspas duplas** (`"C:\notas"`), especialmente se o caminho contiver espacos ou caracteres especiais. Sem aspas, o script pode interpretar partes do caminho como parametros separados.
 
 #### Opcoes disponiveis
 
