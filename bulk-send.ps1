@@ -8,11 +8,11 @@
     Equivalente PowerShell do bulk-send.sh. Compativel com PowerShell 5.1+.
 
 .EXAMPLE
-    .\bulk-send.ps1 emb_abc123... C:\notas
-    .\bulk-send.ps1 emb_abc123... C:\notas -Recursive -Parallel 20 -VerboseOutput
-    .\bulk-send.ps1 emb_abc123... C:\notas -Organize -Env prod
-    .\bulk-send.ps1 emb_abc123... C:\notas\nota.xml
-    .\bulk-send.ps1 emb_abc123... C:\notas -DryRun
+    .\bulk-send.ps1 emb_abc123... C:\notas -Env prod
+    .\bulk-send.ps1 emb_abc123... C:\notas -Env stage -Recursive -Parallel 20 -VerboseOutput
+    .\bulk-send.ps1 emb_abc123... C:\notas -Env prod -Organize
+    .\bulk-send.ps1 emb_abc123... C:\notas\nota.xml -Env prod
+    .\bulk-send.ps1 emb_abc123... C:\notas -Env stage -DryRun
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
@@ -22,8 +22,9 @@ param(
     [string]$XmlPath,
 
     [int]$Parallel = 10,
-    [ValidateSet("dev", "prod")]
-    [string]$Env = "dev",
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("stage", "prod")]
+    [string]$Env,
     [switch]$Recursive,
     [switch]$Organize,
     [string]$SentLog,
@@ -35,8 +36,8 @@ $ErrorActionPreference = "Stop"
 
 # ── URLs por ambiente ────────────────────────────────────────────────────
 $ApiUrls = @{
-    "dev"  = "https://storage-api.embed.zone/v1/ingest"
-    "prod" = "https://storage-api.embed.it/v1/ingest"
+    "stage" = "https://storage-api.embed.zone/v1/ingest"
+    "prod"  = "https://storage-api.embed.it/v1/ingest"
 }
 
 # ── Validacoes ───────────────────────────────────────────────────────────

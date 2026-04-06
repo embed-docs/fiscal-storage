@@ -3,20 +3,19 @@
 # bulk-send.sh — Envio massivo de XMLs fiscais para a XML Ingest API
 #
 # Uso:
-#   ./scripts/bulk-send.sh <api_key> <path_xmls> [opcoes]
+#   ./scripts/bulk-send.sh <api_key> <path_xmls> --env <stage|prod> [opcoes]
 #
 # Exemplos:
-#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/
-#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --recursive
-#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --recursive --parallel 20
 #   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --env prod
-#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --organize
-#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --recursive --parallel 20 --verbose
-#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --sent-log /tmp/meu-controle.log
+#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --env stage --recursive
+#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --env prod --recursive --parallel 20
+#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --env prod --organize
+#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --env stage --recursive --parallel 20 --verbose
+#   ./scripts/bulk-send.sh emb_abc123... /tmp/notas/ --env prod --sent-log /tmp/meu-controle.log
 #
 # Opcoes:
+#   --env ENV       Ambiente: stage | prod (OBRIGATORIO, sem default)
 #   --parallel N    Numero de envios simultaneos (default: 10)
-#   --env ENV       Ambiente: dev | prod (default: dev)
 #   --recursive     Varre subdiretorios recursivamente buscando XMLs
 #   --organize      Move XMLs para subpastas processed/ e errors/ apos envio
 #   --sent-log FILE Caminho do arquivo de controle de enviados (default: <path_xmls>/.bulk-send-sent.log)
@@ -40,7 +39,7 @@ set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────
 PARALLEL=10
-ENV="dev"
+ENV=""
 DRY_RUN=false
 VERBOSE=false
 ORGANIZE=false
@@ -50,8 +49,8 @@ API_KEY=""
 XML_PATH=""
 
 # ── URLs por ambiente ─────────────────────────────────────────────────────
-API_URL_DEV="https://storage-api.embed.zone/ingest"
-API_URL_PROD=""  # preencher quando disponivel
+API_URL_STAGE="https://storage-api.embed.zone/v1/ingest"
+API_URL_PROD="https://storage-api.embed.it/v1/ingest"
 
 # ── Parse de argumentos ──────────────────────────────────────────────────
 show_help() {
@@ -93,8 +92,13 @@ done
 
 # ── Validacoes ────────────────────────────────────────────────────────────
 if [ -z "$API_KEY" ] || [ -z "$XML_PATH" ]; then
-    echo "Uso: $0 <api_key> <path_xmls> [opcoes]"
+    echo "Uso: $0 <api_key> <path_xmls> --env <stage|prod> [opcoes]"
     echo "     $0 --help para mais detalhes"
+    exit 1
+fi
+
+if [ -z "$ENV" ]; then
+    echo "ERRO: O parametro --env e obrigatorio. Use: --env stage | --env prod"
     exit 1
 fi
 
@@ -112,16 +116,10 @@ if [ ! -d "$XML_PATH" ]; then
 fi
 
 case "$ENV" in
-    dev)  API_URL="$API_URL_DEV" ;;
-    prod)
-        if [ -z "$API_URL_PROD" ]; then
-            echo "ERRO: URL de producao ainda nao configurada. Edite API_URL_PROD no script."
-            exit 1
-        fi
-        API_URL="$API_URL_PROD"
-        ;;
+    stage) API_URL="$API_URL_STAGE" ;;
+    prod)  API_URL="$API_URL_PROD" ;;
     *)
-        echo "ERRO: Ambiente '$ENV' nao reconhecido. Use: dev | prod"
+        echo "ERRO: Ambiente '$ENV' nao reconhecido. Use: stage | prod"
         exit 1 ;;
 esac
 

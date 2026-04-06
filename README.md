@@ -531,19 +531,22 @@ Disponibilizamos scripts prontos para envio massivo de XMLs com paralelismo conf
 **Requisitos:** bash, curl, python3
 
 ```bash
-./bulk-send.sh <sua_api_key> "/caminho/para/xmls/"
-./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --parallel 20 --verbose
-./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --recursive --organize
-./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --dry-run
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --env prod
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --env stage --recursive
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --env prod --parallel 20 --verbose
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --env prod --recursive --organize
+./bulk-send.sh <sua_api_key> "/caminho/para/xmls/" --env stage --dry-run
 ```
+
+> **Importante:** O parametro `--env` e **obrigatorio**. Use `stage` para homologacao e `prod` para producao.
 
 #### Windows (PowerShell 5.1+)
 
 ```powershell
-.\bulk-send.ps1 emb_sua_chave... "C:\notas"
-.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Parallel 20 -VerboseOutput
-.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Recursive -Organize
-.\bulk-send.ps1 emb_sua_chave... "C:\notas" -DryRun
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env prod
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env stage -Recursive -Parallel 20 -VerboseOutput
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env prod -Recursive -Organize
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env stage -DryRun
 ```
 
 > **Importante:** Sempre passe o caminho do diretorio entre **aspas duplas** (`"C:\notas"`), especialmente se o caminho contiver espacos ou caracteres especiais. Sem aspas, o script pode interpretar partes do caminho como parametros separados.
@@ -552,6 +555,7 @@ Disponibilizamos scripts prontos para envio massivo de XMLs com paralelismo conf
 
 | bash | PowerShell | Default | Descricao |
 |------|------------|---------|-----------|
+| `--env ENV` | `-Env ENV` | **obrigatorio** | Ambiente: `stage` (homologacao) ou `prod` (producao) |
 | `--parallel N` | `-Parallel N` | 10 | Numero de envios simultaneos |
 | `--recursive` | `-Recursive` | — | Busca XMLs em subdiretorios |
 | `--organize` | `-Organize` | — | Move XMLs processados para `processed/` e com erro para `errors/` |
