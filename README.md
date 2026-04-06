@@ -524,7 +524,7 @@ Para enviar multiplos documentos, faca uma requisicao `POST /v1/ingest` por arqu
 
 ### Scripts de Envio Massivo
 
-Disponibilizamos scripts prontos para envio massivo de XMLs com paralelismo configuravel, retomada automatica e organizacao dos arquivos.
+Disponibilizamos scripts prontos para envio massivo de XMLs com retomada automatica e organizacao dos arquivos.
 
 #### Linux/macOS (bash)
 
@@ -542,26 +542,36 @@ Disponibilizamos scripts prontos para envio massivo de XMLs com paralelismo conf
 
 #### Windows (PowerShell 5.1+)
 
+**Requisitos:** PowerShell 5.1 ou superior (nativo do Windows 10+)
+
 ```powershell
 .\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env prod
-.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env stage -Recursive -Parallel 20 -VerboseOutput
+.\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env stage -Recursive -VerboseOutput
 .\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env prod -Recursive -Organize
 .\bulk-send.ps1 emb_sua_chave... "C:\notas" -Env stage -DryRun
 ```
 
-> **Importante:** Sempre passe o caminho do diretorio entre **aspas duplas** (`"C:\notas"`), especialmente se o caminho contiver espacos ou caracteres especiais. Sem aspas, o script pode interpretar partes do caminho como parametros separados.
+Para executar via linha de comando (CMD ou atalho):
+
+```
+powershell.exe -ExecutionPolicy Bypass -File "C:\temp\bulk-send.ps1" "emb_sua_chave..." "C:\notas" -Recursive -Env prod -VerboseOutput
+```
+
+> **Importante:** Sempre passe o caminho do diretorio entre **aspas duplas** (`"C:\notas"`), especialmente se o caminho contiver espacos ou caracteres especiais.
 
 #### Opcoes disponiveis
 
 | bash | PowerShell | Default | Descricao |
 |------|------------|---------|-----------|
 | `--env ENV` | `-Env ENV` | **obrigatorio** | Ambiente: `stage` (homologacao) ou `prod` (producao) |
-| `--parallel N` | `-Parallel N` | 10 | Numero de envios simultaneos |
+| `--parallel N` | — | 10 | Numero de envios simultaneos (apenas bash) |
 | `--recursive` | `-Recursive` | — | Busca XMLs em subdiretorios |
 | `--organize` | `-Organize` | — | Move XMLs processados para `processed/` e com erro para `errors/` |
 | `--dry-run` | `-DryRun` | — | Lista os arquivos sem enviar |
 | `--verbose` | `-VerboseOutput` | — | Mostra detalhes de cada envio |
 | `--sent-log FILE` | `-SentLog FILE` | auto | Arquivo de controle para retomada automatica |
+
+> **Nota:** O script PowerShell processa os arquivos sequencialmente com retry automatico (3 tentativas com backoff). O script bash suporta envio paralelo configuravel.
 
 **Retomada automatica:** Se o envio for interrompido, basta executar o mesmo comando novamente. Arquivos ja enviados com sucesso serao pulados automaticamente.
 

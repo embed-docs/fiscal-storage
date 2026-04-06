@@ -9,8 +9,8 @@
 
 .EXAMPLE
     .\bulk-send.ps1 emb_abc123... C:\notas -Env prod
-    .\bulk-send.ps1 emb_abc123... C:\notas -Env stage -Recursive -Parallel auto -VerboseOutput
-    .\bulk-send.ps1 emb_abc123... C:\notas -Env prod -Parallel 20 -Organize
+    .\bulk-send.ps1 emb_abc123... C:\notas -Env stage -Recursive -VerboseOutput
+    .\bulk-send.ps1 emb_abc123... C:\notas -Env prod -Organize
     .\bulk-send.ps1 emb_abc123... C:\notas\nota.xml -Env prod
     .\bulk-send.ps1 emb_abc123... C:\notas -Env stage -DryRun
 #>
@@ -21,7 +21,6 @@ param(
     [Parameter(Mandatory = $true, Position = 1)]
     [string]$XmlPath,
 
-    [string]$Parallel = "auto",
     [Parameter(Mandatory = $true)]
     [ValidateSet("stage", "prod")]
     [string]$Env,
@@ -57,41 +56,6 @@ if (Test-Path $XmlPath -PathType Leaf) {
 
 $ApiUrl = $ApiUrls[$Env]
 
-# ── Auto-deteccao de paralelismo ─────────────────────────────────────────
-if ($Parallel -eq "auto") {
-    $cpuCores = 0
-    $memAvailMB = 0
-    try {
-        $cpuCores = (Get-WmiObject Win32_Processor | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
-    } catch {
-        try { $cpuCores = [System.Environment]::ProcessorCount } catch { $cpuCores = 2 }
-    }
-    try {
-        $os = Get-WmiObject Win32_OperatingSystem
-        $memAvailMB = [Math]::Floor([long]$os.FreePhysicalMemory / 1024)
-    } catch {
-        $memAvailMB = 1024
-    }
-
-    # Cada thread usa ~20MB (bytes do XML + objetos .NET + HTTP buffers)
-    $maxByMem = [Math]::Max(2, [Math]::Floor($memAvailMB / 30))
-    # Limitar por CPU: 2 threads por core (IO-bound, nao CPU-bound)
-    $maxByCpu = [Math]::Max(2, $cpuCores * 2)
-    # Teto maximo de 50 threads
-    $ParallelInt = [Math]::Min(50, [Math]::Min($maxByCpu, $maxByMem))
-
-    Write-Host "Auto-deteccao de paralelismo:"
-    Write-Host "  CPU cores:       $cpuCores"
-    Write-Host "  Memoria livre:   ${memAvailMB} MB"
-    Write-Host "  Max por CPU:     $maxByCpu"
-    Write-Host "  Max por memoria: $maxByMem"
-    Write-Host "  Paralelo final:  $ParallelInt thread(s)"
-    Write-Host ""
-} else {
-    $ParallelInt = [int]$Parallel
-    if ($ParallelInt -lt 1) { $ParallelInt = 1 }
-}
-
 # ── Configuracao de rede (.NET) ──────────────────────────────────────────
 # TLS 1.2 obrigatorio (Windows antigos usam TLS 1.0 por padrao)
 try {
@@ -100,7 +64,7 @@ try {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 }
 # Limite de conexoes simultaneas por host (padrao .NET = 2)
-[System.Net.ServicePointManager]::DefaultConnectionLimit = [Math]::Max($ParallelInt * 2, 20)
+[System.Net.ServicePointManager]::DefaultConnectionLimit = 20
 # Desabilitar Expect: 100-Continue (causa delay de 350ms em alguns servidores)
 [System.Net.ServicePointManager]::Expect100Continue = $false
 # Keepalive no pool de conexoes
@@ -171,7 +135,7 @@ Write-Host " Endpoint:   $ApiUrl"
 Write-Host " Diretorio:  $XmlPath"
 Write-Host " Recursivo:  $(if ($Recursive) {'sim'} else {'nao'})"
 Write-Host " Arquivos:   $Total (de $TotalFound encontrados, $Skipped ja enviados)"
-Write-Host " Paralelo:   $ParallelInt $(if ($Parallel -eq 'auto') {'(auto)'} else {''})"
+Write-Host " Modo:       sequencial (robusto)"
 Write-Host " Organizar:  $(if ($Organize) {'sim'} else {'nao'})"
 Write-Host " Sent-log:   $SentLog"
 Write-Host " Inicio:     $($StartTime.ToString('yyyy-MM-dd HH:mm:ss'))"
@@ -186,183 +150,124 @@ if ($DryRun) {
     exit 0
 }
 
-# ── Script block para envio (executado dentro do runspace) ───────────────
-$SendScript = {
-    param($FilePath, $Url, $Key)
-
+# ── Funcao de envio sequencial com retry ─────────────────────────────────
+function Send-OneXml($FilePath, $Url, $Key) {
     $fname = [System.IO.Path]::GetFileName($FilePath)
     $encoded = [System.Uri]::EscapeDataString($fname)
     $fullUrl = "${Url}?filename=${encoded}"
     $res = @{ Status = "ERRO"; FilePath = $FilePath; HttpCode = 0; Info = "" }
 
-    $maxRetries = 3
-    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
         try {
-            # Ler arquivo com FileShare.ReadWrite (evita lock se outro processo usa o arquivo)
-            $fs = [System.IO.File]::Open($FilePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-            $bytes = New-Object byte[] $fs.Length
-            [void]$fs.Read($bytes, 0, $fs.Length)
-            $fs.Close()
-            $fs.Dispose()
+            $bytes = [System.IO.File]::ReadAllBytes($FilePath)
 
             $req = [System.Net.HttpWebRequest]::Create($fullUrl)
             $req.Method = "POST"
             $req.ContentType = "application/xml"
             $req.ContentLength = $bytes.Length
             $req.Headers.Add("X-Api-Key", $Key)
-            $req.Timeout = 30000            # 30s para conectar
-            $req.ReadWriteTimeout = 30000   # 30s para ler resposta
-            $req.KeepAlive = $true
+            $req.Timeout = 30000
+            $req.ReadWriteTimeout = 30000
+            $req.KeepAlive = $false          # Fecha conexao apos cada request — evita acumulo
             $req.AllowAutoRedirect = $false
             $req.ServicePoint.Expect100Continue = $false
 
-            $stream = $req.GetRequestStream()
-            $stream.Write($bytes, 0, $bytes.Length)
-            $stream.Flush()
-            $stream.Close()
-            $stream.Dispose()
-            $bytes = $null  # liberar memoria
+            $reqStream = $req.GetRequestStream()
+            $reqStream.Write($bytes, 0, $bytes.Length)
+            $reqStream.Close()
+            $reqStream.Dispose()
+            $bytes = $null
 
             $resp = $req.GetResponse()
-            $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+            $respStream = $resp.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($respStream)
             $body = $reader.ReadToEnd()
             $reader.Close()
             $reader.Dispose()
+            $respStream.Close()
             $resp.Close()
 
             $res.HttpCode = [int]$resp.StatusCode
             $res.Status = "OK"
             try { $res.Info = ($body | ConvertFrom-Json).hash } catch { $res.Info = "" }
-            break  # sucesso
+            return $res
         } catch [System.Net.WebException] {
             $we = $_.Exception
             if ($we.Response) {
                 $res.HttpCode = [int]$we.Response.StatusCode
                 try {
                     $sr = New-Object System.IO.StreamReader($we.Response.GetResponseStream())
-                    $body = $sr.ReadToEnd()
-                    $sr.Close()
-                    $sr.Dispose()
+                    $errBody = $sr.ReadToEnd()
+                    $sr.Close(); $sr.Dispose()
                     $we.Response.Close()
-                    $j = $body | ConvertFrom-Json
+                    $j = $errBody | ConvertFrom-Json
                     if ($j.error) { $res.Info = $j.error }
                     elseif ($j.message) { $res.Info = $j.message }
-                    else { $res.Info = $body }
-                } catch {
-                    $res.Info = $we.Message
-                }
-                # Erro HTTP (400, 401, 500) — nao retry, erro real
-                break
-            } else {
-                # Timeout, rede, DNS — retry com backoff
-                $res.Info = "Tentativa $attempt/$maxRetries - $($we.Status): $($we.Message)"
-                if ($attempt -lt $maxRetries) {
-                    Start-Sleep -Milliseconds (1000 * $attempt * $attempt)  # 1s, 4s, 9s
-                }
+                    else { $res.Info = $errBody }
+                } catch { $res.Info = $we.Message }
+                return $res  # Erro HTTP real — nao retry
             }
+            $res.Info = "Tentativa $attempt/3 - $($we.Status): $($we.Message)"
+            if ($attempt -lt 3) { Start-Sleep -Seconds ($attempt * 2) }
         } catch {
-            $res.Info = "Tentativa $attempt/$maxRetries - $($_.Exception.Message)"
-            if ($attempt -lt $maxRetries) {
-                Start-Sleep -Milliseconds (1000 * $attempt * $attempt)
-            }
+            $res.Info = "Tentativa $attempt/3 - $($_.Exception.Message)"
+            if ($attempt -lt 3) { Start-Sleep -Seconds ($attempt * 2) }
         }
     }
     return $res
 }
 
-# ── Envio em batches com runspace pool ──────────────────────────────────
-Write-Host "Enviando $Total arquivo(s) com $ParallelInt thread(s)..."
+# ── Envio sequencial (robusto, sem runspaces) ───────────────────────────
+Write-Host "Enviando $Total arquivo(s)..."
 Write-Host ""
 
 $ResultList = [System.Collections.ArrayList]::new()
 $doneCount = 0
 $okCount = 0
 $errCount = 0
-$batchSize = [Math]::Min($ParallelInt * 3, 100)  # batches moderados
-
-# Buffer para sent-log (flush a cada batch em vez de a cada arquivo)
 $sentLogBuffer = [System.Collections.ArrayList]::new()
+$progressStep = [Math]::Max(1, [Math]::Floor($Total / 20))
 
-for ($batchStart = 0; $batchStart -lt $Total; $batchStart += $batchSize) {
-    $batchEnd = [Math]::Min($batchStart + $batchSize, $Total) - 1
-    $batchFiles = $XmlFiles[$batchStart..$batchEnd]
+foreach ($file in $XmlFiles) {
+    $r = Send-OneXml $file.FullName $ApiUrl $ApiKey
+    [void]$ResultList.Add($r)
+    $doneCount++
 
-    $pool = [RunspaceFactory]::CreateRunspacePool(1, $ParallelInt)
-    $pool.Open()
-    $jobs = [System.Collections.ArrayList]::new()
-
-    foreach ($file in $batchFiles) {
-        $ps = [PowerShell]::Create()
-        $ps.RunspacePool = $pool
-        [void]$ps.AddScript($SendScript)
-        [void]$ps.AddArgument($file.FullName)
-        [void]$ps.AddArgument($ApiUrl)
-        [void]$ps.AddArgument($ApiKey)
-
-        $handle = $ps.BeginInvoke()
-        [void]$jobs.Add(@{ PS = $ps; Handle = $handle; File = $file })
+    if ($r.Status -eq "OK") {
+        $okCount++
+        [void]$sentLogBuffer.Add($r.FilePath)
+    } else {
+        $errCount++
     }
 
-    # Coletar resultados do batch
-    foreach ($job in $jobs) {
-        try {
-            # Timeout de 90s para job completar (30s request + retries + margem)
-            if (-not $job.Handle.AsyncWaitHandle.WaitOne(90000)) {
-                $job.PS.Stop()
-                $r = @{ Status = "ERRO"; FilePath = $job.File.FullName; HttpCode = 0; Info = "Timeout total (90s)" }
-            } else {
-                $result = $job.PS.EndInvoke($job.Handle)
-                if ($result -and $result.Count -gt 0) {
-                    $r = $result[0]
-                } else {
-                    $r = @{ Status = "ERRO"; FilePath = $job.File.FullName; HttpCode = 0; Info = "Sem resposta do runspace" }
-                }
-            }
-        } catch {
-            $r = @{ Status = "ERRO"; FilePath = $job.File.FullName; HttpCode = 0; Info = $_.Exception.Message }
-        } finally {
-            $job.Handle.AsyncWaitHandle.Close()
-            $job.PS.Dispose()
-        }
-
-        [void]$ResultList.Add($r)
-        $doneCount++
-
-        if ($r.Status -eq "OK") {
-            $okCount++
-            [void]$sentLogBuffer.Add($r.FilePath)
-        } else {
-            $errCount++
-        }
-
-        # Progress
-        if ($VerboseOutput) {
-            $label = if ($r.Status -eq "OK") { "OK   " } else { "ERRO " }
-            $info = if ($r.Status -eq "OK") { $r.Info } else { "HTTP $($r.HttpCode): $($r.Info)" }
-            Write-Host "  ($doneCount/$Total) $label $($job.File.Name) -> $info"
-        } elseif ($Total -ge 20 -and ($doneCount % [Math]::Max(1, [Math]::Floor($Total / 20)) -eq 0 -or $doneCount -eq $Total)) {
-            $pct = [Math]::Floor($doneCount * 100 / $Total)
-            $elapsed = (Get-Date) - $StartTime
-            $rate = if ($elapsed.TotalSeconds -gt 0) { [Math]::Round($doneCount / $elapsed.TotalSeconds, 1) } else { 0 }
-            Write-Host "  Progresso: $doneCount / $Total ($pct%) - $rate docs/s - OK: $okCount Erros: $errCount"
-        }
-    }
-
-    # Flush sent-log buffer a cada batch
-    if ($sentLogBuffer.Count -gt 0) {
+    # Flush sent-log a cada 50 arquivos
+    if ($sentLogBuffer.Count -ge 50) {
         $sentLogBuffer | Out-File -FilePath $SentLog -Append -Encoding UTF8
         $sentLogBuffer.Clear()
     }
 
-    # Liberar recursos do batch
-    $pool.Close()
-    $pool.Dispose()
-    $jobs.Clear()
-
-    # GC a cada 10 batches para evitar acumulo de memoria
-    if (($batchStart / $batchSize) % 10 -eq 0) {
-        [System.GC]::Collect()
+    # Progress
+    if ($VerboseOutput) {
+        $label = if ($r.Status -eq "OK") { "OK   " } else { "ERRO " }
+        $info = if ($r.Status -eq "OK") { $r.Info } else { "HTTP $($r.HttpCode): $($r.Info)" }
+        Write-Host "  ($doneCount/$Total) $label $($file.Name) -> $info"
+    } elseif ($Total -ge 20 -and ($doneCount % $progressStep -eq 0 -or $doneCount -eq $Total)) {
+        $pct = [Math]::Floor($doneCount * 100 / $Total)
+        $elapsed = (Get-Date) - $StartTime
+        $rate = if ($elapsed.TotalSeconds -gt 0) { [Math]::Round($doneCount / $elapsed.TotalSeconds, 1) } else { 0 }
+        $remaining = if ($rate -gt 0) { [Math]::Ceiling(($Total - $doneCount) / $rate) } else { 0 }
+        $eta = if ($remaining -gt 60) { "$([Math]::Floor($remaining/60))m $($remaining%60)s" } else { "${remaining}s" }
+        Write-Host "  Progresso: $doneCount / $Total ($pct%) - $rate docs/s - ETA: $eta - OK: $okCount Erros: $errCount"
     }
+
+    # GC a cada 500 arquivos
+    if ($doneCount % 500 -eq 0) { [System.GC]::Collect() }
+}
+
+# Flush sent-log restante
+if ($sentLogBuffer.Count -gt 0) {
+    $sentLogBuffer | Out-File -FilePath $SentLog -Append -Encoding UTF8
+    $sentLogBuffer.Clear()
 }
 
 Write-Host ""
@@ -434,7 +339,7 @@ $logLines = @(
     "Endpoint:    $ApiUrl",
     "Diretorio:   $XmlPath",
     "Recursivo:   $Recursive",
-    "Paralelo:    $ParallelInt",
+    "Modo:        sequencial",
     "Organize:    $Organize",
     "Sent-log:    $SentLog",
     "Inicio:      $($StartTime.ToString('yyyy-MM-dd HH:mm:ss'))",
