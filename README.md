@@ -37,7 +37,8 @@ X-Api-Key: emb_sua_chave_aqui
 ```
 
 - A chave tem o formato `emb_` seguido de 64 caracteres hexadecimais
-- Cada chave esta vinculada a sua empresa
+- Cada chave esta vinculada a sua empresa: **software house** ou **estabelecimento comercial**
+- A chave de **escritorio de contabilidade** e de consulta (API Fiscal) e nao envia documentos: a API responde `403`
 - **Nunca compartilhe sua chave.** Em caso de vazamento, solicite revogacao imediata pelo e-mail [comercial@embed.it](mailto:comercial@embed.it)
 
 ---
@@ -89,8 +90,11 @@ O conteudo XML do documento fiscal, enviado diretamente no corpo da requisicao.
 | **NFS-e** | Nota Fiscal de Servico Eletronica (padrao nacional SPED) |
 | **Evento NF-e** | Cancelamento, carta de correcao, confirmacao, ciencia da operacao e outros eventos |
 | **Inutilizacao NF-e** | Inutilizacao de numeracao de NF-e/NFC-e |
+| **CT-e / CT-e OS** | Conhecimento de Transporte Eletronico (modelos 57 e 67) |
+| **MDF-e** | Manifesto Eletronico de Documentos Fiscais (modelo 58) |
+| **CF-e SAT** | Cupom Fiscal Eletronico SAT (modelo 59) e o seu cancelamento |
 
-A API tambem aceita **qualquer outro documento XML fiscal** (ex: CT-e, MDF-e, SAT/CF-e, NF3e). Tipos ainda nao mapeados sao recebidos e armazenados com seguranca para processamento futuro.
+A API tambem aceita **qualquer outro documento XML fiscal** (ex: NF3e, BP-e). Tipos ainda nao mapeados sao recebidos e armazenados com seguranca para processamento futuro.
 
 > **Garantia de guarda:** Uma vez que a API retorne HTTP 200, o documento esta salvo e sua guarda e garantida, independente do tipo. Nao ha risco de perda.
 
@@ -128,11 +132,19 @@ A API tambem aceita **qualquer outro documento XML fiscal** (ex: CT-e, MDF-e, SA
 }
 ```
 
-**Autenticacao invalida (HTTP 401):**
+**Chave ausente (HTTP 401):**
 
 ```json
 {
     "message": "Unauthorized"
+}
+```
+
+**Chave recusada — invalida, expirada, revogada, de outro ambiente ou de escritorio de contabilidade (HTTP 403):**
+
+```json
+{
+    "message": "Forbidden"
 }
 ```
 
@@ -615,7 +627,8 @@ Voce pode reenviar documentos com seguranca, sem risco de duplicidade.
 |------|-------------|-------------|
 | 200 | Documento recebido com sucesso | Nenhuma acao — sucesso |
 | 400 | Corpo da requisicao vazio ou XML invalido | Verificar o conteudo enviado |
-| 401 | Chave de API invalida ou ausente | Verificar o header `X-Api-Key` |
+| 401 | Header `X-Api-Key` ausente | Enviar o header `X-Api-Key` |
+| 403 | Chave invalida, expirada, revogada, de outro ambiente ou de escritorio de contabilidade | Verificar a chave e o ambiente da URL |
 | 500 | Erro interno no servidor | Aguardar alguns segundos e tentar novamente |
 
 ---
@@ -652,8 +665,8 @@ Voce pode reenviar documentos com seguranca, sem risco de duplicidade.
 | Sintoma | Causa | Solucao |
 |---------|-------|---------|
 | HTTP 404 `{"message":"Not Found"}` | URL sem o path `/v1/ingest` ou usando metodo GET em vez de POST | Verificar se a URL esta completa: `https://storage-api.embed.zone/v1/ingest`. O metodo deve ser **POST**, nao GET. |
-| HTTP 401 `Unauthorized` | Chave de API invalida ou de ambiente errado | Confirmar que a chave comeca com `emb_` e que o ambiente da URL corresponde a chave (homologacao = `.embed.zone`, producao = `.embed.it`). |
-| HTTP 403 `Forbidden` | Chave de API expirada, revogada ou inativa | Entrar em contato com [comercial@embed.it](mailto:comercial@embed.it) para verificar o status da chave. |
+| HTTP 401 `Unauthorized` | Header `X-Api-Key` nao enviado | Incluir o header `X-Api-Key: emb_...` em toda requisicao. |
+| HTTP 403 `Forbidden` | Chave invalida, de ambiente errado, expirada, revogada, inativa ou de escritorio de contabilidade | Confirmar que a chave comeca com `emb_` e que o ambiente da URL corresponde a chave (homologacao = `.embed.zone`, producao = `.embed.it`). Persistindo, contatar [comercial@embed.it](mailto:comercial@embed.it). |
 | HTTP 400 `Body vazio` | O XML nao foi enviado no corpo da requisicao | Verificar se o conteudo do XML esta sendo enviado no body do POST, nao como parametro da URL. |
 | `I/O error 105` (Delphi) | Arquivo XML aberto por outro processo ou stream nao inicializado | Usar `fmOpenRead or fmShareDenyNone` no `TFileStream.Create`. Nao usar `fmShareDenyWrite`. |
 | `I/O error 105` no Response (Delphi/RestRequest4D) | RestRequest4D nao consegue ler resposta JSON | Usar `THTTPClient` nativo em vez do RestRequest4D. Ver exemplo Delphi acima. |
