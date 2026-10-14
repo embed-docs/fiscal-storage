@@ -96,12 +96,14 @@ O conteudo XML do documento fiscal, enviado diretamente no corpo da requisicao.
 
 A API tambem aceita **qualquer outro documento XML fiscal** (ex: NF3e, BP-e). Tipos ainda nao mapeados sao recebidos e armazenados com seguranca para processamento futuro.
 
-> **Garantia de guarda:** Uma vez que a API retorne HTTP 200, o documento esta salvo e sua guarda e garantida, independente do tipo. Nao ha risco de perda.
+> **Envie o XML autorizado** (com o protocolo da SEFAZ; no CF-e SAT, o XML devolvido pelo SAT). Documento emitido a partir de 2026 sem prova de autorizacao (ex.: NFC-e em contingencia ainda nao transmitida) e recebido (HTTP 200), mas nao e processado: fica como ignorado, com o motivo.
+
+> **Garantia de guarda:** Uma vez que a API retorne HTTP 200, o documento esta salvo. A guarda definitiva vale para o documento autorizado (ver aviso acima); documentos emitidos antes de 2026 entram mesmo sem protocolo, por serem acervo historico.
 
 **Formatos de envelope aceitos:**
 
 - `<nfeProc>` contendo `<NFe>` + `<protNFe>` (formato completo)
-- `<NFe>` diretamente (formato sem protocolo)
+- `<NFe>` diretamente (formato sem protocolo) — so para documentos emitidos antes de 2026; a partir de 2026 envie o `<nfeProc>` com o protocolo
 - Envelope SOAP contendo documentos fiscais
 
 ---
